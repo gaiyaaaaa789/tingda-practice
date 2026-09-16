@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123b34">
+  <meta name="description" content="面向法院书记员和中文录入练习者的听打、看打训练工具，支持自动计时、自定义素材、语音朗读和成绩分析。">
+  <title>听打间 · 江西法院书记员训练台</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23123b34'/%3E%3Cpath d='M15 17h34v30H15z' fill='none' stroke='%23e5eee9' stroke-width='2'/%3E%3Cpath d='M21 24h22M21 31h22M21 38h14' stroke='%23d2aa5b' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="听打间首页">
+        <span class="brand-seal" aria-hidden="true">赣</span>
+        <span class="brand-copy">
+          <strong>听打间</strong>
+          <small>江西法院书记员训练台</small>
+        </span>
+      </a>
+
+      <nav class="main-nav" aria-label="主导航">
+        <button class="nav-button is-active" type="button" data-view="practice">练习台</button>
+        <button class="nav-button" type="button" data-view="dashboard">数据中心</button>
+      </nav>
+
+      <div class="top-actions">
+        <button class="icon-button" id="themeButton" type="button" aria-label="切换深色模式" title="切换深色模式">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.64 5.64l1.42 1.42M16.94 16.94l1.42 1.42M18.36 5.64l-1.42 1.42M7.06 16.94l-1.42 1.42"/><circle cx="12" cy="12" r="4"/></svg>
+        </button>
+        <button class="icon-button" id="helpButton" type="button" aria-label="查看快捷键" title="快捷键与使用说明">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.4 2.4 0 1 1 3.9 1.9c-1 .7-1.6 1.2-1.6 2.6M12 17.2h.01"/></svg>
+        </button>
+        <button class="button button-quiet button-compact" id="settingsButton" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.04 1.56V20.3h-3v-.08a1.7 1.7 0 0 0-1.04-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06L6.6 16.94l.06-.06A1.7 1.7 0 0 0 7 15a1.7 1.7 0 0 0-1.56-1.04H5.36v-3h.08A1.7 1.7 0 0 0 7 9.92a1.7 1.7 0 0 0-.34-1.88L6.6 7.98 8.72 5.86l.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 11.7 4.7v-.08h3v.08a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.12 2.12-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.04h.08v3h-.08A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+          设置
+        </button>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <aside class="library-panel" id="libraryPanel" aria-label="素材库">
+        <div class="panel-heading">
+          <div>
+            <span class="section-kicker">文稿案卷</span>
+            <h1>素材库</h1>
+          </div>
+          <button class="icon-button" id="closeLibraryButton" type="button" aria-label="关闭素材库">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+
+        <label class="search-field">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+          <input id="materialSearch" type="search" placeholder="搜索标题、标签或正文">
+        </label>
+
+        <div class="library-tools">
+          <div class="filter-segment" id="libraryFilter" role="group" aria-label="素材筛选">
+            <button class="is-active" type="button" data-filter="all">全部</button>
+            <button type="button" data-filter="kanda">看打</button>
+            <button type="button" data-filter="tingda">听打</button>
+            <button type="button" data-filter="favorite">收藏</button>
+          </div>
+          <button class="button button-primary button-block" id="newMaterialButton" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            新建自定义素材
+          </button>
+        </div>
+
+        <div class="material-list" id="materialList" aria-live="polite"></div>
+
+        <div class="library-footer">
+          <button class="text-button" id="importMaterialsButton" type="button">导入素材</button>
+          <span aria-hidden="true">·</span>
+          <button class="text-button" id="exportMaterialsButton" type="button">导出备份</button>
+          <span aria-hidden="true">·</span>
+          <button class="text-button text-danger" id="resetLibraryButton" type="button">恢复默认</button>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <section class="view practice-view is-active" id="practiceView" data-view-panel="practice">
+          <div class="practice-header">
+            <div class="material-heading">
+              <button class="mobile-library-button" id="openLibraryButton" type="button" aria-label="打开素材库">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+              </button>
+              <div>
+                <div class="material-meta-line">
+                  <span class="mode-badge" id="modeBadge">看打</span>
+                  <span id="materialCategory">法院看打</span>
+                  <span id="materialDifficulty">基础</span>
+                </div>
+                <h2 id="materialTitle">立案登记服务规范</h2>
+                <p id="materialDescription">训练用模拟材料</p>
+              </div>
+            </div>
+            <div class="material-actions">
+              <button class="icon-button" id="favoriteButton" type="button" aria-label="收藏当前素材" title="收藏当前素材">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.92 1.06-6.2L3 9.53l6.22-.9L12 3Z"/></svg>
+              </button>
+              <button class="button button-quiet button-compact" id="copyMaterialButton" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>
+                复制为我的素材
+              </button>
+              <button class="icon-button" id="editMaterialButton" type="button" aria-label="编辑当前素材" title="编辑当前素材">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.2-1 10.6-10.6a2.1 2.1 0 0 0-3-3L5.2 16 4 20Z"/><path d="m14.5 6.5 3 3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="mode-bar">
+            <div class="mode-switch" role="tablist" aria-label="练习模式">
+              <button class="is-active" type="button" data-mode="kanda" role="tab">
+                <span class="mode-icon">看</span>
+                <span><strong>看打练习</strong><small>对照文稿录入</small></span>
+              </button>
+              <button type="button" data-mode="tingda" role="tab">
+                <span class="mode-icon">听</span>
+                <span><strong>听打练习</strong><small>听取语音记录</small></span>
+              </button>
+            </div>
+
+            <div class="quick-settings" aria-label="计时设置">
+              <span class="quick-label">计时</span>
+              <div class="duration-options" id="durationOptions">
+                <button type="button" data-duration="3">3 分</button>
+                <button class="is-active" type="button" data-duration="5">5 分</button>
+                <button type="button" data-duration="10">10 分</button>
+                <button type="button" data-duration="15">15 分</button>
+                <button type="button" data-duration="0">不限时</button>
+              </div>
+              <label class="switch-line" title="关闭后使用正计时">
+                <input id="countdownToggle" type="checkbox" checked>
+                <span class="switch-track" aria-hidden="true"></span>
+                <span>倒计时</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="practice-console">
+            <div class="instrument-strip">
+              <div class="primary-clock">
+                <span class="clock-label" id="clockLabel">剩余时间</span>
+                <strong id="clockDisplay">05:00.0</strong>
+                <span class="clock-state" id="clockState">准备就绪</span>
+              </div>
+              <div class="live-metrics">
+                <div class="metric">
+                  <span>速度</span>
+                  <strong id="speedMetric">0</strong>
+                  <small>字/分</small>
+                </div>
+                <div class="metric">
+                  <span>净速</span>
+                  <strong id="netSpeedMetric">0</strong>
+                  <small>字/分</small>
+                </div>
+                <div class="metric">
+                  <span>准确率</span>
+                  <strong id="accuracyMetric">100</strong>
+                  <small>%</small>
+                </div>
+                <div class="metric">
+                  <span>进度</span>
+                  <strong id="progressMetric">0</strong>
+                  <small>%</small>
+                </div>
+              </div>
+              <div class="session-actions">
+                <button class="button button-primary" id="startButton" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>
+                  <span>开始练习</span>
+                </button>
+                <button class="icon-button" id="pauseButton" type="button" aria-label="暂停练习" title="暂停 / 继续" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg>
+                </button>
+                <button class="icon-button" id="resetButton" type="button" aria-label="重新开始" title="重新开始" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6"/><path d="M4 4v4.6h4.6"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="speed-track" aria-hidden="true">
+              <div class="speed-track-fill" id="speedTrackFill"></div>
+              <span class="speed-marker" id="speedMarker" style="left: 0%">0</span>
+            </div>
+
+            <div class="stage-toolbar">
+              <div class="stage-status">
+                <span class="status-dot" id="statusDot"></span>
+                <strong id="stageStatus">按“开始练习”自动计时</strong>
+                <span id="inputHint">输入第一个字后开始记录</span>
+              </div>
+              <div class="stage-tools">
+                <button class="tool-button" id="fontDecreaseButton" type="button" title="减小字号">A−</button>
+                <button class="tool-button" id="fontIncreaseButton" type="button" title="增大字号">A+</button>
+                <button class="tool-button" id="focusButton" type="button" title="专注模式">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></svg>
+                  专注
+                </button>
+              </div>
+            </div>
+
+            <div class="typing-workspace" id="typingWorkspace">
+              <div class="paper-column">
+                <div class="paper-header">
+                  <div>
+                    <span id="paperLabel">看打原稿</span>
+                    <small id="paperSubLabel">逐字实时校勘</small>
+                  </div>
+                  <div class="paper-legend">
+                    <span><i class="legend-correct"></i>正确</span>
+                    <span><i class="legend-error"></i>错误</span>
+                    <span><i class="legend-active"></i>当前</span>
+                  </div>
+                </div>
+
+                <div class="text-scroller" id="textScroller">
+                  <div class="source-text" id="sourceText" aria-label="待录入文稿"></div>
+                  <div class="listening-placeholder" id="listeningPlaceholder">
+                    <div class="sound-rings" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+                    <strong>听打过程中原文已隐藏</strong>
+                    <span>听到语音后直接录入；交卷后可查看逐字对照</span>
+                    <button class="text-button" id="peekSourceButton" type="button">临时查看原文</button>
+                  </div>
+                </div>
+
+                <div class="comparison-panel" id="comparisonPanel" hidden>
+                  <div class="comparison-heading">
+                    <strong>本次校勘</strong>
+                    <span id="comparisonSummary">尚未开始</span>
+                  </div>
+                  <div class="comparison-lines" id="comparisonLines"></div>
+                </div>
+
+                <label class="typing-input-wrap" for="typingInput">
+                  <span class="input-label" id="typingInputLabel">在此录入</span>
+                  <textarea id="typingInput" rows="4" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="按下开始，然后使用中文输入法录入……" disabled></textarea>
+                  <div class="input-foot">
+                    <span id="inputStats">0 字 · 0 次退格</span>
+                    <span class="ime-hint">支持中文输入法组合输入，按 Esc 可暂停</span>
+                  </div>
+                </label>
+              </div>
+
+              <aside class="assist-column">
+                <div class="listen-console" id="listenConsole">
+                  <div class="assist-heading">
+                    <div>
+                      <span class="section-kicker">语音控制台</span>
+                      <h3>听打朗读</h3>
+                    </div>
+                    <span class="live-tag"><i></i>语音合成</span>
+                  </div>
+                  <div class="speech-now">
+                    <span>当前句段</span>
+                    <strong id="speechSegmentLabel">第 1 / 1 句</strong>
+                  </div>
+                  <p class="speech-preview" id="speechPreview">开始练习后自动朗读。若系统未安装中文语音，可选择“导入录音”的自定义素材。</p>
+                  <div class="speech-controls">
+                    <button class="icon-button" id="speechPrevButton" type="button" aria-label="上一句" title="上一句">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 6 8 6-8 6V6ZM20 6v12"/></svg>
+                    </button>
+                    <button class="button button-primary button-round" id="speechPlayButton" type="button" aria-label="播放当前句">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z"/></svg>
+                    </button>
+                    <button class="icon-button" id="speechNextButton" type="button" aria-label="下一句" title="下一句">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m17 6-8 6 8 6V6ZM4 6v12"/></svg>
+                    </button>
+                  </div>
+                  <div class="voice-settings">
+                    <label>
+                      <span>朗读速度</span>
+                      <select id="speechRateSelect">
+                        <option value="0.65">0.65× 慢速</option>
+                        <option value="0.8" selected>0.8× 稳定</option>
+                        <option value="0.95">0.95× 常规</option>
+                        <option value="1.1">1.1× 快速</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>系统语音</span>
+                      <select id="voiceSelect"><option value="">自动选择中文语音</option></select>
+                    </label>
+                    <label>
+                      <span>每句重复</span>
+                      <select id="repeatSelect">
+                        <option value="1" selected>1 次</option>
+                        <option value="2">2 次</option>
+                        <option value="3">3 次</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div class="audio-attachment" id="audioAttachment" hidden>
+                    <span>当前素材附有录音</span>
+                    <strong id="audioFileName">录音文件</strong>
+                    <button class="text-button" id="useAudioButton" type="button">使用录音</button>
+                  </div>
+                </div>
+
+                <div class="shortcut-card">
+                  <span class="section-kicker">快捷操作</span>
+                  <dl>
+                    <div><dt>开始 / 交卷</dt><dd>Ctrl + Enter</dd></div>
+                    <div><dt>暂停 / 继续</dt><dd>Esc</dd></div>
+                    <div><dt>重播当前句</dt><dd>F2</dd></div>
+                    <div><dt>上一句 / 下一句</dt><dd>F1 / F3</dd></div>
+                  </dl>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </section>
+
+        <section class="view dashboard-view" id="dashboardView" data-view-panel="dashboard" hidden>
+          <div class="dashboard-header">
+            <div>
+              <span class="section-kicker">训练档案</span>
+              <h2>数据与趋势</h2>
+              <p>所有记录仅保存在当前浏览器，可随素材备份一起导出。</p>
+            </div>
+            <button class="button button-danger-quiet" id="clearHistoryButton" type="button">清空练习记录</button>
+          </div>
+
+          <div class="summary-grid">
+            <article class="summary-primary">
+              <span>累计练习</span>
+              <strong id="totalPracticeTime">0<small>分钟</small></strong>
+              <p id="totalSessionText">还没有完成练习</p>
+              <div class="summary-seal">录</div>
+            </article>
+            <article><span>平均速度</span><strong id="averageSpeed">0<small>字/分</small></strong><p>按全部历史练习计算</p></article>
+            <article><span>平均准确率</span><strong id="averageAccuracy">0<small>%</small></strong><p>包含已纠正的历史错误</p></article>
+            <article><span>最佳净速</span><strong id="bestNetSpeed">0<small>字/分</small></strong><p id="bestSessionTitle">等待首条成绩</p></article>
+          </div>
+
+          <div class="dashboard-grid">
+            <section class="chart-panel">
+              <div class="panel-title">
+                <div><span class="section-kicker">近 14 次</span><h3>速度与准确率</h3></div>
+                <div class="chart-legend"><span><i class="chart-speed"></i>速度</span><span><i class="chart-accuracy"></i>准确率</span></div>
+              </div>
+              <div class="chart-wrap"><canvas id="historyChart" aria-label="历史成绩趋势图"></canvas><p class="empty-chart" id="historyChartEmpty">完成一次练习后显示趋势</p></div>
+            </section>
+
+            <section class="goal-panel">
+              <div class="panel-title"><div><span class="section-kicker">本周目标</span><h3>训练进度</h3></div></div>
+              <div class="goal-ring" id="weeklyGoalRing"><strong id="weeklyMinutes">0</strong><span>/ 120 分钟</span></div>
+              <div class="goal-stats">
+                <div><span>本周练习</span><strong id="weeklySessions">0 次</strong></div>
+                <div><span>建议速度</span><strong>≥ 60 字/分</strong></div>
+                <div><span>建议准确率</span><strong>≥ 98%</strong></div>
+              </div>
+            </section>
+          </div>
+
+          <section class="history-panel">
+            <div class="panel-title">
+              <div><span class="section-kicker">练习明细</span><h3>最近记录</h3></div>
+              <label class="small-select">筛选
+                <select id="historyFilterSelect">
+                  <option value="all">全部模式</option>
+                  <option value="kanda">只看打</option>
+                  <option value="tingda">只听打</option>
+                </select>
+              </label>
+            </div>
+            <div class="history-table-wrap">
+              <table class="history-table">
+                <thead><tr><th>时间</th><th>素材</th><th>模式</th><th>用时</th><th>速度</th><th>净速</th><th>准确率</th><th>操作</th></tr></thead>
+                <tbody id="historyTableBody"></tbody>
+              </table>
+              <div class="empty-state" id="historyEmptyState">
+                <span class="empty-mark">空</span>
+                <strong>暂无练习记录</strong>
+                <p>完成一次看打或听打后，成绩会自动保存在这里。</p>
+                <button class="button button-primary" type="button" data-go-practice>开始第一次练习</button>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="mobile-backdrop" id="mobileBackdrop" hidden></div>
+  <audio id="audioPlayer" hidden></audio>
+
+  <dialog class="modal material-modal" id="materialDialog">
+    <form method="dialog" id="materialForm">
+      <div class="modal-header">
+        <div>
+          <span class="section-kicker">素材录入</span>
+          <h2 id="materialDialogTitle">新建自定义素材</h2>
+        </div>
+        <button class="icon-button modal-close" type="button" data-close-dialog aria-label="关闭">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <input id="editingMaterialId" type="hidden">
+        <div class="form-grid two-columns">
+          <label class="field">
+            <span>素材标题 <b>*</b></span>
+            <input id="materialTitleInput" type="text" maxlength="60" required placeholder="例如：民事案件庭审笔录">
+          </label>
+          <label class="field">
+            <span>适用模式 <b>*</b></span>
+            <select id="materialTypeInput" required>
+              <option value="kanda">看打</option>
+              <option value="tingda">听打</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>分类</span>
+            <input id="materialCategoryInput" type="text" maxlength="30" placeholder="例如：庭审笔录">
+          </label>
+          <label class="field">
+            <span>难度</span>
+            <select id="materialDifficultyInput">
+              <option value="基础">基础</option>
+              <option value="进阶" selected>进阶</option>
+              <option value="实战">实战</option>
+              <option value="挑战">挑战</option>
+            </select>
+          </label>
+        </div>
+        <label class="field">
+          <span>标签</span>
+          <input id="materialTagsInput" type="text" maxlength="100" placeholder="多个标签用空格或逗号分隔，例如：民事 庭审 江西法院">
+        </label>
+        <label class="field">
+          <span>练习正文 <b>*</b></span>
+          <textarea id="materialTextInput" rows="11" required placeholder="粘贴完整文稿。听打素材会自动按标点拆分为朗读句段。"></textarea>
+          <small><span id="materialCharacterCount">0</span> 字 · 建议单篇 100—1200 字</small>
+        </label>
+        <div class="field">
+          <span>配套录音（可选）</span>
+          <div class="audio-upload" id="audioUploadArea">
+            <input id="materialAudioInput" type="file" accept="audio/*" hidden>
+            <div class="upload-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
+            </div>
+            <div><strong id="audioUploadTitle">选择本地录音文件</strong><small>支持 MP3、WAV、M4A 等浏览器可播放格式，建议不超过 10 MB。</small></div>
+            <button class="button button-quiet button-compact" id="chooseAudioButton" type="button">选择文件</button>
+            <button class="text-button text-danger" id="removeAudioButton" type="button" hidden>移除</button>
+          </div>
+        </div>
+        <p class="form-note">默认素材与自定义素材均保存在本机浏览器中，不会上传到网络。</p>
+      </div>
+      <div class="modal-footer">
+        <button class="button button-danger-quiet" id="deleteMaterialButton" type="button" hidden>删除素材</button>
+        <button class="button button-quiet" type="button" data-close-dialog>取消</button>
+        <button class="button button-primary" id="saveMaterialButton" type="submit">保存素材</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="modal settings-modal" id="settingsDialog">
+    <form method="dialog" id="settingsForm">
+      <div class="modal-header">
+        <div><span class="section-kicker">练习偏好</span><h2>设置</h2></div>
+        <button class="icon-button modal-close" type="button" data-close-dialog aria-label="关闭">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body settings-body">
+        <section>
+          <h3>判分规则</h3>
+          <label class="setting-row"><span><strong>听打忽略标点与空格</strong><small>看打始终严格计入标点、空格和换行</small></span><input id="ignorePunctuationToggle" type="checkbox" checked></label>
+          <label class="setting-row"><span><strong>允许退格修改</strong><small>关闭后退格键不会删除内容</small></span><input id="allowBackspaceToggle" type="checkbox" checked></label>
+          <label class="setting-row" hidden><span><strong>错字立即停止</strong><small>练习中不显示对错，错误只在交卷后统计</small></span><input id="errorStopToggle" type="checkbox"></label>
+          <label class="setting-row"><span><strong>文稿播完自动交卷</strong><small>听打朗读结束后自动结算成绩</small></span><input id="autoFinishAudioToggle" type="checkbox" checked></label>
+        </section>
+        <section>
+          <h3>输入体验</h3>
+          <label class="setting-row"><span><strong>按键提示音</strong><small>每个已录入字符播放轻微提示音</small></span><input id="keySoundToggle" type="checkbox" checked></label>
+          <label class="setting-row"><span><strong>完成后自动展开校勘</strong><small>结果页显示正确的逐字对照</small></span><input id="autoComparisonToggle" type="checkbox" checked></label>
+          <label class="setting-row"><span><strong>听打时隐藏原文</strong><small>可随时使用“临时查看原文”</small></span><input id="hideSourceToggle" type="checkbox" checked></label>
+          <label class="setting-row"><span><strong>自动下一句</strong><small>朗读完成后连续播放下一句段</small></span><input id="autoNextToggle" type="checkbox" checked></label>
+        </section>
+        <section>
+          <h3>字号与显示</h3>
+          <div class="font-setting">
+            <span>正文大小</span>
+            <input id="fontSizeRange" type="range" min="18" max="36" step="1" value="24">
+            <output id="fontSizeOutput">24 px</output>
+          </div>
+          <label class="setting-row"><span><strong>启动时进入专注模式</strong><small>隐藏素材库和辅助面板，只保留练习区域</small></span><input id="autoFocusToggle" type="checkbox"></label>
+        </section>
+      </div>
+      <div class="modal-footer">
+        <button class="button button-quiet" id="restoreSettingsButton" type="button">恢复默认设置</button>
+        <button class="button button-primary" type="submit">完成</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="modal help-modal" id="helpDialog">
+    <div class="modal-header">
+      <div><span class="section-kicker">操作手册</span><h2>快捷键与练习流程</h2></div>
+      <button class="icon-button modal-close" type="button" data-close-dialog aria-label="关闭">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body help-body">
+      <section>
+        <h3>开始练习</h3>
+        <ol>
+          <li>从左侧素材库选择看打或听打文稿。</li>
+          <li>选择计时时长，倒计时与正计时可随时切换。</li>
+          <li>点击“开始练习”，在输入区使用中文输入法录入。首次按键后自动开始计时。</li>
+          <li>倒计时归零、文稿录入完成或按 Ctrl + Enter，均可交卷。</li>
+        </ol>
+      </section>
+      <section>
+        <h3>快捷键</h3>
+        <dl class="shortcut-list">
+          <div><dt>开始 / 交卷</dt><dd><kbd>Ctrl</kbd> + <kbd>Enter</kbd></dd></div>
+          <div><dt>暂停 / 继续</dt><dd><kbd>Esc</kbd></dd></div>
+          <div><dt>重播当前句</dt><dd><kbd>F2</kbd></dd></div>
+          <div><dt>上一句 / 下一句</dt><dd><kbd>F1</kbd> / <kbd>F3</kbd></dd></div>
+          <div><dt>专注模式</dt><dd><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd></dd></div>
+        </dl>
+      </section>
+      <section>
+        <h3>听打语音说明</h3>
+        <p>默认素材使用浏览器系统中文语音朗读；不同电脑的语音音色和断句略有差异。正式训练建议为自定义听打素材导入清晰录音。</p>
+      </section>
+    </div>
+  </dialog>
+
+  <dialog class="modal result-modal" id="resultDialog">
+    <div class="result-sheet">
+      <div class="result-hero">
+        <div class="result-grade" id="resultGrade">良</div>
+        <div>
+          <span class="section-kicker">练习结算</span>
+          <h2 id="resultTitle">训练完成</h2>
+          <p id="resultSubtitle">稳定录入，继续保持。</p>
+        </div>
+        <button class="icon-button modal-close" type="button" data-close-result aria-label="关闭">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <div class="result-score-grid">
+        <div><span>速度</span><strong id="resultSpeed">0</strong><small>字/分</small></div>
+        <div><span>净速</span><strong id="resultNetSpeed">0</strong><small>字/分</small></div>
+        <div><span>准确率</span><strong id="resultAccuracy">0</strong><small>%</small></div>
+        <div><span>实际用时</span><strong id="resultDuration">00:00</strong><small>分:秒</small></div>
+        <div><span>正确字数</span><strong id="resultCorrectChars">0</strong><small>字</small></div>
+        <div><span>退格次数</span><strong id="resultBackspaces">0</strong><small>次</small></div>
+      </div>
+      <div class="result-analysis">
+        <div>
+          <span class="section-kicker">本场趋势</span>
+          <canvas id="resultChart" aria-label="本次练习速度趋势图"></canvas>
+        </div>
+        <div class="result-advice">
+          <span class="section-kicker">训练建议</span>
+          <p id="resultAdvice">继续保持稳定节奏。</p>
+          <button class="text-button" id="reviewMistakesButton" type="button">查看错字校勘</button>
+        </div>
+      </div>
+      <div class="result-comparison" id="resultComparison" hidden>
+        <div class="panel-title"><h3>逐字校勘</h3><span id="resultComparisonSummary"></span></div>
+        <div id="resultComparisonContent" class="comparison-lines result-lines"></div>
+      </div>
+      <div class="result-actions">
+        <button class="button button-quiet" type="button" data-close-result>返回练习台</button>
+        <button class="button button-primary" id="retryButton" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6"/><path d="M4 4v4.6h4.6"/></svg>
+          再练一次
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="modal confirm-modal" id="confirmDialog">
+    <div class="confirm-content">
+      <span class="confirm-mark">?</span>
+      <h2 id="confirmTitle">确认操作</h2>
+      <p id="confirmMessage">此操作无法撤销。</p>
+      <div class="modal-footer">
+        <button class="button button-quiet" id="confirmCancelButton" type="button">取消</button>
+        <button class="button button-danger" id="confirmActionButton" type="button">确认</button>
+      </div>
+    </div>
+  </dialog>
+
+  <input id="materialImportInput" type="file" accept=".json,application/json" hidden>
+  <input id="textImportInput" type="file" accept=".txt,.md,text/plain,text/markdown" hidden>
+  <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+
+
+
