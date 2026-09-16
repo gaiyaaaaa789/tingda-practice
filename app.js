@@ -78,7 +78,7 @@
     speedMetric: $("speedMetric"), netSpeedMetric: $("netSpeedMetric"), accuracyMetric: $("accuracyMetric"), progressMetric: $("progressMetric"),
     startButton: $("startButton"), pauseButton: $("pauseButton"), resetButton: $("resetButton"), speedTrackFill: $("speedTrackFill"), speedMarker: $("speedMarker"),
     statusDot: $("statusDot"), stageStatus: $("stageStatus"), inputHint: $("inputHint"), fontDecreaseButton: $("fontDecreaseButton"), fontIncreaseButton: $("fontIncreaseButton"),
-    focusButton: $("focusButton"), sourceText: $("sourceText"), peekSourceButton: $("peekSourceButton"), comparisonPanel: $("comparisonPanel"),
+    focusButton: $("focusButton"), sourceText: $("sourceText"), typingHighlight: $("typingHighlight"), peekSourceButton: $("peekSourceButton"), comparisonPanel: $("comparisonPanel"),
     comparisonSummary: $("comparisonSummary"), comparisonLines: $("comparisonLines"), typingInput: $("typingInput"), typingInputLabel: $("typingInputLabel"),
     inputStats: $("inputStats"), speechSegmentLabel: $("speechSegmentLabel"), speechPreview: $("speechPreview"), speechPrevButton: $("speechPrevButton"),
     speechPlayButton: $("speechPlayButton"), speechNextButton: $("speechNextButton"), speechRateSelect: $("speechRateSelect"), voiceSelect: $("voiceSelect"),
@@ -327,6 +327,7 @@
     if (review) appendInsertions(index);
     els.sourceText.replaceChildren(fragment);
     els.body.classList.toggle("is-reviewing", review);
+    updateInputHighlight();
   }
 
   function stats() {
@@ -387,8 +388,92 @@
     stopSpeech(); if (timer) clearInterval(timer); timer = null; practice = makePractice(); if (!keepInput) { els.typingInput.value = ""; lastRaw = ""; } els.typingInput.disabled = false; els.comparisonPanel.hidden = true; els.comparisonLines.replaceChildren(); els.body.classList.remove("is-peeking", "is-reviewing"); speechIndex = 0; speechRepeat = 0; renderSource(); updateUI(); updateSpeech();
   }
   function updateClock() { const s = stats(); recordSample(s); updateUI(s); if (settings.countdown && settings.duration > 0 && s.ms >= settings.duration * 60000) finishPractice("countdown"); }
+  function canonicalWithMap(value) {
+    const raw = Array.from(String(value || "").replace(/\r\n?/g, "\n"));
+    const chars = [];
+    const rawIndices = [];
+    raw.forEach((char, index) => {
+      if (!canonical(char).length) return;
+      chars.push(char);
+      rawIndices.push(index);
+    });
+    return { raw, chars, rawIndices };
+  }
+
+  function syncInputHighlight() {
+    if (!els.typingHighlight || !els.typingInput) return;
+    els.typingHighlight.scrollTop = els.typingInput.scrollTop;
+    els.typingHighlight.scrollLeft = els.typingInput.scrollLeft;
+  }
+
+  function updateInputHighlight() {
+    const layer = els.typingHighlight;
+    if (!layer) return;
+    layer.replaceChildren();
+    if (practice.status !== "finished") return;
+    const typedMap = canonicalWithMap(els.typingInput.value);
+    const alignment = alignChars(targetChars(), typedMap.chars);
+    const states = new Map();
+    const missingAt = Array.from({ length: typedMap.raw.length + 1 }, () => []);
+    alignment.operations.forEach((operation) => {
+      if (operation.type === "insert") {
+        const rawIndex = typedMap.rawIndices[operation.typedIndex];
+        if (rawIndex !== undefined) states.set(rawIndex, "insert");
+      } else if (operation.type === "substitute") {
+        const rawIndex = typedMap.rawIndices[operation.typedIndex];
+        if (rawIndex !== undefined) states.set(rawIndex, "error");
+      } else if (operation.type === "match") {
+        const rawIndex = typedMap.rawIndices[operation.typedIndex];
+        if (rawIndex !== undefined) states.set(rawIndex, "match");
+      } else {
+        const rawIndex = typedMap.rawIndices[operation.typedIndex] ?? typedMap.raw.length;
+        missingAt[rawIndex].push(operation.targetChar);
+      }
+    });
+    const fragment = document.createDocumentFragment();
+    const appendMissing = (at) => missingAt[at].forEach((char) => {
+      const marker = document.createElement("span");
+      marker.className = "input-missing";
+      marker.dataset.mark = "缺:" + char;
+      marker.textContent = "\u200b";
+      fragment.appendChild(marker);
+    });
+    typedMap.raw.forEach((char, index) => {
+      appendMissing(index);
+      const span = document.createElement("span");
+      const state = states.get(index);
+      span.className = state === "error" ? "input-char input-error" : state === "insert" ? "input-char input-insert" : "input-char";
+      span.textContent = char;
+      fragment.appendChild(span);
+    });
+    appendMissing(typedMap.raw.length);
+    const tail = document.createElement("span");
+    tail.textContent = "\u200b";
+    fragment.appendChild(tail);
+    layer.replaceChildren(fragment);
+    syncInputHighlight();
+  }
+
+  function collapseAutoPairs() {
+    const input = els.typingInput;
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    if (start !== end) return;
+    const before = input.value.slice(0, start);
+    const after = input.value.slice(end);
+    const pairs = [["《", "》"], ["“", "”"], ["‘", "’"], ["（", "）"], ["【", "】"], ["〈", "〉"], ["〔", "〕"], ["「", "」"], ["『", "』"], ["｛", "｝"], ["[", "]"], ["{", "}"]];
+    for (const [open, close] of pairs) {
+      if (before.endsWith(open) && after.startsWith(close)) {
+        input.value = before + after.slice(close.length);
+        input.setSelectionRange(start, start);
+        return;
+      }
+    }
+  }
+
   function processInput() {
     if (composing || practice.status === "finished") return;
+    collapseAutoPairs();
     const raw = els.typingInput.value;
     if (!settings.allowBackspace && raw.length < lastRaw.length) { els.typingInput.value = lastRaw; return; }
     if (practice.status === "idle" && raw.length) startPractice();
@@ -559,6 +644,7 @@
     els.durationOptions.addEventListener("click", (event) => { const button = event.target.closest("[data-duration]"); if (!button) return; settings.duration = Number(button.dataset.duration); saveSettings(); applySettings(); if (practice.status === "idle") updateUI(); });
     els.countdownToggle.addEventListener("change", () => { settings.countdown = els.countdownToggle.checked; saveSettings(); updateUI(); });
     els.startButton.addEventListener("click", () => practice.status === "running" ? finishPractice("manual") : startPractice()); els.pauseButton.addEventListener("click", pausePractice); els.resetButton.addEventListener("click", () => resetPractice(false));
+    els.typingInput.addEventListener("scroll", syncInputHighlight);
     els.typingInput.addEventListener("compositionstart", () => { composing = true; }); els.typingInput.addEventListener("compositionend", () => { composing = false; processInput(); }); els.typingInput.addEventListener("input", processInput);
     els.peekSourceButton.addEventListener("click", () => { els.body.classList.toggle("is-peeking"); els.peekSourceButton.textContent = els.body.classList.contains("is-peeking") ? "收回原文" : "临时查看原文"; updateSpeech(); });
     els.focusButton.addEventListener("click", toggleFocus);
