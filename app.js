@@ -363,7 +363,7 @@
     els.clockLabel.textContent = total ? "剩余时间" : "已用时间"; els.clockDisplay.textContent = clock(total ? remain : s.ms);
     els.clockState.textContent = practice.status === "idle" ? "准备就绪" : practice.status === "running" ? "计时中" : practice.status === "paused" ? "已暂停" : "练习结束";
     els.speedMetric.textContent = String(Math.round(s.speed)); els.netSpeedMetric.textContent = active ? "--" : String(Math.round(s.net));
-    els.accuracyMetric.textContent = active ? "--" : String(Math.round(s.accuracy * 10) / 10); els.progressMetric.textContent = String(Math.round(s.progress));
+    els.accuracyMetric.textContent = practice.status === "finished" ? String(Math.round(s.accuracy * 10) / 10) : "--"; els.progressMetric.textContent = String(Math.round(s.progress));
     const scale = Math.min(100, Math.max(0, s.speed / 1.6)); els.speedTrackFill.style.width = `${scale}%`; els.speedMarker.style.left = `${scale}%`; els.speedMarker.textContent = String(Math.round(s.speed));
     els.inputStats.textContent = `${s.typed.length} 字 · ${practice.backspaces} 次退格`;
     els.statusDot.className = `status-dot${practice.status === "running" ? " is-running" : practice.status === "paused" ? " is-paused" : practice.status === "finished" ? " is-finished" : ""}`;
