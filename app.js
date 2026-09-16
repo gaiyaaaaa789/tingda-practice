@@ -127,6 +127,7 @@
   let speechToken = 0;
   let confirmResolve = null;
   let audioContext = null;
+  let alignmentCache = null;
 
   function mergeMaterials() {
     const builtIns = DEFAULT_MATERIALS.map((item) => ({ ...item, favorite: Boolean(prefs[item.id]?.favorite) }));
@@ -196,26 +197,163 @@
     selectedId = item.id; prefs.lastSelected = id; saveMaterials(); resetPractice(false); renderList(); renderDetails(); prepareAudio(); updateSpeech(); closeLibrary();
   }
   function switchMode(mode) { const item = materials.find((entry) => entry.type === mode); if (item) selectMaterial(item.id); }
-  function renderSource() {
-    const item = current(); if (!item) return;
-    const typed = canonical(els.typingInput.value); const review = practice.status === "finished"; const fragment = document.createDocumentFragment(); let index = 0;
-    Array.from(String(item.text).replace(/\r\n?/g, "\n")).forEach((char) => {
-      if (char === "\n") { fragment.appendChild(document.createElement("br")); if (!canIgnorePunctuation()) index += 1; return; }
-      if (!canonical(char).length) { const span = document.createElement("span"); span.className = "char-cell is-excluded"; span.textContent = char; fragment.appendChild(span); return; }
-      const span = document.createElement("span"); span.className = "char-cell"; span.textContent = char; span.dataset.index = String(index);
-      if (review && index < typed.length) { if (typed[index] === char) span.classList.add("is-correct"); else { span.classList.add("is-error", "has-wrong-typed"); span.dataset.typed = typed[index]; } }
-      fragment.appendChild(span); index += 1;
+  function alignChars(target, typed) {
+    const cacheKey = target.join("\u0001") + "\u0002" + typed.join("\u0001");
+    if (alignmentCache?.key === cacheKey) return alignmentCache.value;
+    const n = target.length;
+    const m = typed.length;
+    const dp = new Array(n + 1);
+    const trace = new Array(n + 1);
+    for (let i = 0; i <= n; i += 1) {
+      dp[i] = new Int32Array(m + 1);
+      trace[i] = new Uint8Array(m + 1);
+      dp[i][0] = i;
+      trace[i][0] = 3;
+    }
+    for (let j = 0; j <= m; j += 1) {
+      dp[0][j] = j;
+      trace[0][j] = 2;
+    }
+    for (let i = 1; i <= n; i += 1) {
+      for (let j = 1; j <= m; j += 1) {
+        const same = target[i - 1] === typed[j - 1];
+        let best = dp[i - 1][j - 1] + (same ? 0 : 1);
+        let op = same ? 0 : 1;
+        const insertCost = dp[i][j - 1] + 1;
+        const deleteCost = dp[i - 1][j] + 1;
+        if (!same && (insertCost < best || (insertCost === best && m > n))) {
+          best = insertCost;
+          op = 2;
+        }
+        if (!same && (deleteCost < best || (deleteCost === best && n > m && op !== 2))) {
+          best = deleteCost;
+          op = 3;
+        }
+        dp[i][j] = best;
+        trace[i][j] = op;
+      }
+    }
+    const operations = [];
+    let i = n;
+    let j = m;
+    while (i > 0 || j > 0) {
+      const op = trace[i][j];
+      if (op === 0) {
+        operations.push({ type: "match", targetIndex: i - 1, typedIndex: j - 1, targetChar: target[i - 1], typedChar: typed[j - 1] });
+        i -= 1;
+        j -= 1;
+      } else if (op === 1) {
+        operations.push({ type: "substitute", targetIndex: i - 1, typedIndex: j - 1, targetChar: target[i - 1], typedChar: typed[j - 1] });
+        i -= 1;
+        j -= 1;
+      } else if (op === 2) {
+        operations.push({ type: "insert", targetIndex: i, typedIndex: j - 1, targetChar: "", typedChar: typed[j - 1] });
+        j -= 1;
+      } else {
+        operations.push({ type: "delete", targetIndex: i - 1, typedIndex: j, targetChar: target[i - 1], typedChar: "" });
+        i -= 1;
+      }
+    }
+    operations.reverse();
+    let matches = 0;
+    let substitutions = 0;
+    let insertions = 0;
+    let deletions = 0;
+    operations.forEach((operation) => {
+      if (operation.type === "match") matches += 1;
+      else if (operation.type === "substitute") substitutions += 1;
+      else if (operation.type === "insert") insertions += 1;
+      else deletions += 1;
     });
-    if (review && typed.length > index) { const span = document.createElement("span"); span.className = "char-cell is-error"; span.textContent = `＋多录 ${typed.length - index} 字`; fragment.appendChild(span); }
-    els.sourceText.replaceChildren(fragment); els.body.classList.toggle("is-reviewing", review);
+    const errorCount = substitutions + insertions + deletions;
+    const value = { operations, matches, substitutions, insertions, deletions, errorCount, totalUnits: matches + errorCount };
+    alignmentCache = { key: cacheKey, value };
+    return value;
   }
+
+  function renderSource() {
+    const item = current();
+    if (!item) return;
+    const target = targetChars();
+    const typed = canonical(els.typingInput.value);
+    const review = practice.status === "finished";
+    const alignment = review ? alignChars(target, typed) : null;
+    const states = new Array(target.length).fill("pending");
+    const insertions = Array.from({ length: target.length + 1 }, () => []);
+    if (alignment) {
+      alignment.operations.forEach((operation) => {
+        if (operation.type === "insert") insertions[operation.targetIndex].push(operation.typedChar);
+        else states[operation.targetIndex] = operation;
+      });
+    }
+    const fragment = document.createDocumentFragment();
+    let index = 0;
+    const appendInsertions = (at) => insertions[at].forEach((char) => {
+      const span = document.createElement("span");
+      span.className = "char-cell is-error is-insertion";
+      span.textContent = "＋" + char;
+      fragment.appendChild(span);
+    });
+    Array.from(String(item.text).replace(/\r\n?/g, "\n")).forEach((char) => {
+      if (char === "\n") {
+        if (review) appendInsertions(index);
+        fragment.appendChild(document.createElement("br"));
+        if (!canIgnorePunctuation()) index += 1;
+        return;
+      }
+      if (!canonical(char).length) {
+        if (review) appendInsertions(index);
+        const excluded = document.createElement("span");
+        excluded.className = "char-cell is-excluded";
+        excluded.textContent = char;
+        fragment.appendChild(excluded);
+        return;
+      }
+      if (review) appendInsertions(index);
+      const span = document.createElement("span");
+      span.className = "char-cell";
+      span.textContent = char;
+      span.dataset.index = String(index);
+      if (review) {
+        const state = states[index];
+        if (state?.type === "match") span.classList.add("is-correct");
+        else if (state?.type === "substitute") { span.classList.add("is-error", "has-wrong-typed"); span.dataset.typed = state.typedChar; }
+        else if (state?.type === "delete") { span.classList.add("is-error", "has-wrong-typed"); span.dataset.typed = "缺"; }
+        else span.classList.add("is-error");
+      }
+      fragment.appendChild(span);
+      index += 1;
+    });
+    if (review) appendInsertions(index);
+    els.sourceText.replaceChildren(fragment);
+    els.body.classList.toggle("is-reviewing", review);
+  }
+
   function stats() {
-    const target = targetChars(); const typed = canonical(els.typingInput.value); let correct = 0; let currentErrors = 0;
-    typed.forEach((char, index) => { if (char === target[index]) correct += 1; else currentErrors += 1; });
-    const ms = Math.max(0, elapsed()); const minutes = ms / 60000;
-    const accuracy = practice.keystrokes ? Math.max(0, (practice.keystrokes - practice.errors) / practice.keystrokes * 100) : 100;
-    return { target, typed, correct, currentErrors, ms, speed: minutes ? typed.length / minutes : 0, net: minutes ? correct / minutes : 0, accuracy, progress: target.length ? Math.min(100, typed.length / target.length * 100) : 0 };
+    const target = targetChars();
+    const typed = canonical(els.typingInput.value);
+    const alignment = alignChars(target, typed);
+    practice.errors = alignment.errorCount;
+    const ms = Math.max(0, elapsed());
+    const minutes = ms / 60000;
+    const accuracy = alignment.totalUnits ? alignment.matches / alignment.totalUnits * 100 : 100;
+    return {
+      target,
+      typed,
+      alignment,
+      correct: alignment.matches,
+      currentErrors: alignment.errorCount,
+      insertions: alignment.insertions,
+      deletions: alignment.deletions,
+      substitutions: alignment.substitutions,
+      ms,
+      speed: minutes ? typed.length / minutes : 0,
+      net: minutes ? alignment.matches / minutes : 0,
+      accuracy,
+      progress: target.length ? Math.min(100, typed.length / target.length * 100) : 0
+    };
   }
+
   function recordSample(s) { if (practice.status !== "running") return; const second = Math.floor(s.ms / 1000); if (second <= practice.lastSampleSecond) return; practice.lastSampleSecond = second; practice.samples.push({ second, speed: Math.round(s.speed), netSpeed: Math.round(s.net), accuracy: Math.round(s.accuracy * 10) / 10 }); }
   function updateUI(s = stats()) {
     const total = settings.countdown && settings.duration > 0 ? settings.duration * 60000 : 0; const remain = total ? Math.max(0, total - s.ms) : 0;
@@ -254,34 +392,76 @@
     const raw = els.typingInput.value;
     if (!settings.allowBackspace && raw.length < lastRaw.length) { els.typingInput.value = lastRaw; return; }
     if (practice.status === "idle" && raw.length) startPractice();
-    const previous = canonical(lastRaw); const next = canonical(raw); let changed = false;
+    const previous = canonical(lastRaw);
+    const next = canonical(raw);
+    let changed = false;
     if (next.length < previous.length) practice.backspaces += previous.length - next.length;
-    else if (next.length > previous.length) { const target = targetChars(); for (let i = previous.length; i < next.length; i += 1) { practice.keystrokes += 1; if (next[i] !== target[i]) practice.errors += 1; } changed = true; }
-    else if (raw !== lastRaw && raw) { practice.keystrokes += 1; practice.errors += 1; changed = true; }
+    else if (next.length > previous.length) { practice.keystrokes += next.length - previous.length; changed = true; }
+    else if (raw !== lastRaw && raw) { practice.keystrokes += 1; changed = true; }
     if (changed || next.length < previous.length) beep();
-    lastRaw = raw; renderSource(); updateUI();
-    const target = targetChars(); const typed = canonical(raw);
-    if (target.length && typed.length === target.length && typed.every((char, index) => char === target[index])) setTimeout(() => { if (practice.status === "running" && canonical(els.typingInput.value).length === target.length) finishPractice("completed"); }, 280);
+    lastRaw = raw;
+    const target = targetChars();
+    const alignment = alignChars(target, next);
+    practice.errors = alignment.errorCount;
+    renderSource();
+    updateUI();
+    const isComplete = target.length && next.length === target.length && alignment.errorCount === 0;
+    if (isComplete) setTimeout(() => {
+      if (practice.status === "running" && canonical(els.typingInput.value).length === target.length) finishPractice("completed");
+    }, 280);
   }
+
   function comparisonHtml(target, typed) {
-    const max = Math.max(target.length, typed.length); const mismatches = []; for (let i = 0; i < max; i += 1) if (target[i] !== typed[i]) mismatches.push(i);
-    if (!mismatches.length) return '<div class="comparison-row"><span>校勘</span><div>逐字一致，没有发现错漏。</div></div>';
-    const clusters = []; mismatches.forEach((index) => { const last = clusters.at(-1); if (!last || index - last.at(-1) > 8) clusters.push([index]); else last.push(index); });
-    return clusters.slice(0, 10).map((cluster) => { const start = Math.max(0, cluster[0] - 7); const end = Math.min(max, cluster.at(-1) + 8); const a = []; const b = []; for (let i = start; i < end; i += 1) { const bad = target[i] !== typed[i]; const tc = target[i] ?? "□"; const uc = typed[i] ?? "缺"; a.push(bad ? `<mark>${escapeHtml(tc)}</mark>` : escapeHtml(tc)); b.push(bad ? `<mark>${escapeHtml(uc)}</mark>` : escapeHtml(uc)); } return `<div class="comparison-row"><span>第 ${cluster[0] + 1} 字</span><div>原文：${a.join("")} <ins>录入：${b.join("")}</ins></div></div>`; }).join("");
+    const operations = alignChars(target, typed).operations;
+    const errorIndexes = [];
+    operations.forEach((operation, index) => { if (operation.type !== "match") errorIndexes.push(index); });
+    if (!errorIndexes.length) return '<div class="comparison-row"><span>校勘</span><div>逐字一致，没有发现错漏。</div></div>';
+    const clusters = [];
+    errorIndexes.forEach((index) => {
+      const last = clusters.at(-1);
+      if (!last || index - last.at(-1) > 5) clusters.push([index]);
+      else last.push(index);
+    });
+    return clusters.slice(0, 10).map((cluster) => {
+      const start = Math.max(0, cluster[0] - 6);
+      const end = Math.min(operations.length, cluster.at(-1) + 7);
+      const slice = operations.slice(start, end);
+      const targetParts = [];
+      const typedParts = [];
+      slice.forEach((operation) => {
+        if (operation.type === "match") {
+          targetParts.push(escapeHtml(operation.targetChar));
+          typedParts.push(escapeHtml(operation.typedChar));
+        } else if (operation.type === "substitute") {
+          targetParts.push("<mark>" + escapeHtml(operation.targetChar) + "</mark>");
+          typedParts.push("<mark>" + escapeHtml(operation.typedChar) + "</mark>");
+        } else if (operation.type === "delete") {
+          targetParts.push("<mark>" + escapeHtml(operation.targetChar) + "</mark>");
+          typedParts.push('<mark>缺</mark>');
+        } else {
+          targetParts.push('<span class="alignment-gap">空</span>');
+          typedParts.push("<ins>插入 " + escapeHtml(operation.typedChar) + "</ins>");
+        }
+      });
+      const first = operations[cluster[0]];
+      const label = first.type === "insert" ? "插入位置" : "第 " + (first.targetIndex + 1) + " 字";
+      return '<div class="comparison-row"><span>' + label + '</span><div>标准：' + targetParts.join("") + ' <ins>录入：' + typedParts.join("") + '</ins></div></div>';
+    }).join("");
   }
+
   function grade(s) { if (s.accuracy >= 99 && s.net >= 80) return { mark: "优", title: "熟练录入", text: "速度和准确率均达到优秀水平。" }; if (s.accuracy >= 97 && s.net >= 55) return { mark: "良", title: "稳定完成", text: "节奏稳定，继续巩固易错字。" }; if (s.accuracy >= 92 && s.net >= 35) return { mark: "中", title: "基础扎实", text: "保持准确，逐步提高连续录入速度。" }; return { mark: "练", title: "完成训练", text: "先保证准确，再逐步减少停顿和退格。" }; }
 
   function finishPractice(reason = "manual") {
     if (practice.status === "idle" || practice.status === "finished") return;
     if (practice.status === "running") practice.activeMs += Date.now() - practice.runningSince;
     practice.runningSince = 0; practice.status = "finished"; practice.finishedAt = Date.now(); practice.reason = reason; stopSpeech(); if (timer) clearInterval(timer); timer = null;
-    const s = stats(); recordSample(s); els.comparisonSummary.textContent = (s.currentErrors + Math.max(0, s.typed.length - s.target.length)) ? `发现 ${s.currentErrors + Math.max(0, s.typed.length - s.target.length)} 处差异` : "逐字一致"; els.comparisonLines.innerHTML = comparisonHtml(s.target, s.typed);
+    const s = stats(); recordSample(s); els.comparisonSummary.textContent = s.errors ? `智能对齐发现 ${s.errors} 处差异（插入 ${s.insertions} · 缺失 ${s.deletions} · 替换 ${s.substitutions}）` : "逐字一致"; els.comparisonLines.innerHTML = comparisonHtml(s.target, s.typed);
     els.comparisonPanel.hidden = !settings.autoComparison; if (current().type === "tingda") { els.body.classList.add("is-peeking"); els.peekSourceButton.textContent = "收回原文"; }
     saveHistory(s); renderSource(); updateUI(s); showResult(s);
   }
   function saveHistory(s) {
     if (practice.recorded) return; practice.recorded = true; if (!s.keystrokes && !s.typed.length) return;
-    const result = grade(s); history.unshift({ id: uid("record"), timestamp: Date.now(), materialId: current().id, materialTitle: current().title, mode: current().type, durationSeconds: Math.max(1, Math.round(s.ms / 1000)), speed: Math.round(s.speed * 10) / 10, netSpeed: Math.round(s.net * 10) / 10, accuracy: Math.round(s.accuracy * 10) / 10, correctChars: s.correct, typedChars: s.typed.length, backspaces: practice.backspaces, errors: practice.errors, grade: result.mark });
+    const result = grade(s); history.unshift({ id: uid("record"), timestamp: Date.now(), materialId: current().id, materialTitle: current().title, mode: current().type, durationSeconds: Math.max(1, Math.round(s.ms / 1000)), speed: Math.round(s.speed * 10) / 10, netSpeed: Math.round(s.net * 10) / 10, accuracy: Math.round(s.accuracy * 10) / 10, correctChars: s.correct, typedChars: s.typed.length, backspaces: practice.backspaces, errors: s.errors, grade: result.mark });
     history = history.slice(0, 500); write(KEY.history, history); renderDashboard();
   }
   function drawChart(canvas, data, height) {
@@ -295,7 +475,7 @@
     const result = grade(s); els.resultGrade.textContent = result.mark; els.resultTitle.textContent = result.title; els.resultSubtitle.textContent = result.text;
     els.resultSpeed.textContent = String(Math.round(s.speed)); els.resultNetSpeed.textContent = String(Math.round(s.net)); els.resultAccuracy.textContent = String(Math.round(s.accuracy * 10) / 10); els.resultDuration.textContent = shortDuration(s.ms / 1000); els.resultCorrectChars.textContent = String(s.correct); els.resultBackspaces.textContent = String(practice.backspaces);
     els.resultAdvice.textContent = s.accuracy >= 98 ? "准确率较稳定，下一步可提高连续输入速度。" : s.accuracy >= 94 ? "节奏较稳定，建议针对本次差异做短句重复练习。" : "当前应先保证准确，再看速度。";
-    const mismatch = s.currentErrors + Math.max(0, s.typed.length - s.target.length); els.resultComparisonSummary.textContent = mismatch ? `发现 ${mismatch} 处差异` : "逐字一致"; els.resultComparisonContent.innerHTML = comparisonHtml(s.target, s.typed); els.resultComparison.hidden = !settings.autoComparison; els.reviewMistakesButton.textContent = settings.autoComparison ? "收起错字校勘" : "查看错字校勘";
+    els.resultComparisonSummary.textContent = s.errors ? `智能对齐发现 ${s.errors} 处差异（插入 ${s.insertions} · 缺失 ${s.deletions} · 替换 ${s.substitutions}）` : "逐字一致"; els.resultComparisonContent.innerHTML = comparisonHtml(s.target, s.typed); els.resultComparison.hidden = !settings.autoComparison; els.reviewMistakesButton.textContent = settings.autoComparison ? "收起错字校勘" : "查看错字校勘";
     if (!els.resultDialog.open) els.resultDialog.showModal(); requestAnimationFrame(() => drawChart(els.resultChart, practice.samples.length ? practice.samples : [{ netSpeed: Math.round(s.net), accuracy: s.accuracy }], 128));
   }
   function renderHistory() {
