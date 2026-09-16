@@ -118,6 +118,7 @@
   let timer = null;
   let composing = false;
   let lastRaw = "";
+  let lastInputType = "";
   let audioUrl = null;
   let pendingAudio = null;
   let removeAudio = false;
@@ -454,27 +455,37 @@
     syncInputHighlight();
   }
 
-  function collapseAutoPairs() {
+  function collapseAutoPairs(previousRaw, inputType) {
     const input = els.typingInput;
-    const start = input.selectionStart;
-    const end = input.selectionEnd;
-    if (start !== end) return;
-    const before = input.value.slice(0, start);
-    const after = input.value.slice(end);
+    let value = input.value;
+    if (value === previousRaw || inputType === "insertFromPaste" || inputType === "insertFromDrop") return value;
+    let prefix = 0;
+    while (prefix < value.length && prefix < previousRaw.length && value[prefix] === previousRaw[prefix]) prefix += 1;
+    let suffix = 0;
+    while (suffix < value.length - prefix && suffix < previousRaw.length - prefix && value[value.length - 1 - suffix] === previousRaw[previousRaw.length - 1 - suffix]) suffix += 1;
+    const inserted = value.slice(prefix, value.length - suffix);
+    const removed = previousRaw.slice(prefix, previousRaw.length - suffix);
+    if (removed || !inserted) return value;
     const pairs = [["《", "》"], ["“", "”"], ["‘", "’"], ["（", "）"], ["【", "】"], ["〈", "〉"], ["〔", "〕"], ["「", "」"], ["『", "』"], ["｛", "｝"], ["[", "]"], ["{", "}"]];
     for (const [open, close] of pairs) {
-      if (before.endsWith(open) && after.startsWith(close)) {
-        input.value = before + after.slice(close.length);
-        input.setSelectionRange(start, start);
-        return;
+      const pair = open + close;
+      const at = inserted.indexOf(pair);
+      if (at >= 0) {
+        const removeAt = prefix + at + 1;
+        value = value.slice(0, removeAt) + value.slice(removeAt + 1);
+        const caret = Math.max(prefix + at + 1, (input.selectionStart || value.length + 1) - 1);
+        input.value = value;
+        input.setSelectionRange(caret, caret);
+        return value;
       }
     }
+    return value;
   }
 
-  function processInput() {
+  function processInput(event) {
+    if (event?.inputType) lastInputType = event.inputType;
     if (composing || practice.status === "finished") return;
-    collapseAutoPairs();
-    const raw = els.typingInput.value;
+    const raw = collapseAutoPairs(lastRaw, lastInputType);
     if (!settings.allowBackspace && raw.length < lastRaw.length) { els.typingInput.value = lastRaw; return; }
     if (practice.status === "idle" && raw.length) startPractice();
     const previous = canonical(lastRaw);
@@ -645,6 +656,7 @@
     els.countdownToggle.addEventListener("change", () => { settings.countdown = els.countdownToggle.checked; saveSettings(); updateUI(); });
     els.startButton.addEventListener("click", () => practice.status === "running" ? finishPractice("manual") : startPractice()); els.pauseButton.addEventListener("click", pausePractice); els.resetButton.addEventListener("click", () => resetPractice(false));
     els.typingInput.addEventListener("scroll", syncInputHighlight);
+    els.typingInput.addEventListener("beforeinput", (event) => { lastInputType = event.inputType || ""; });
     els.typingInput.addEventListener("compositionstart", () => { composing = true; }); els.typingInput.addEventListener("compositionend", () => { composing = false; processInput(); }); els.typingInput.addEventListener("input", processInput);
     els.peekSourceButton.addEventListener("click", () => { els.body.classList.toggle("is-peeking"); els.peekSourceButton.textContent = els.body.classList.contains("is-peeking") ? "收回原文" : "临时查看原文"; updateSpeech(); });
     els.focusButton.addEventListener("click", toggleFocus);
