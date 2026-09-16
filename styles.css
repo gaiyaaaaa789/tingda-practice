@@ -652,9 +652,15 @@ body.is-reviewing .typing-input-wrap .typing-editor > textarea {
 }
 .input-char { border-radius: 2px; }
 .input-char.input-error { background: var(--seal-light); box-shadow: inset 0 -2px var(--seal); color: var(--seal-dark); }
+.input-char.input-error, .input-char.input-insert { background: var(--seal-light); box-shadow: inset 0 -2px var(--seal); color: var(--seal-dark); text-decoration: none; }
 .input-char.input-insert { background: var(--gold-light); box-shadow: inset 0 -2px var(--gold); color: var(--gold); text-decoration: underline wavy var(--gold); }
 .input-missing { display: inline-block; height: 1em; position: relative; width: 0; }
-.input-missing::after { color: var(--seal); content: attr(data-mark); font-family: var(--sans); font-size: 9px; left: 0; line-height: 1.1; position: absolute; top: -1.15em; white-space: nowrap; }
+.input-missing::after { background: var(--seal); content: ""; height: 1.15em; left: 0; position: absolute; top: -1.05em; width: 2px; }
 @media (max-width: 760px) {
   .typing-editor { min-height: 190px; }
 }
+
+.char-cell.is-insertion-marker { background: var(--seal); display: inline-block; height: 1.15em; margin: 0 1px; vertical-align: -0.18em; width: 2px; }
+.paper-legend { display: none !important; }
+
+.comparison-row ins { background: var(--seal-light); color: var(--seal-dark); text-decoration: none; }
