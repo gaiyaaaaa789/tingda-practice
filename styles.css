@@ -664,3 +664,5 @@ body.is-reviewing .typing-input-wrap .typing-editor > textarea {
 .paper-legend { display: none !important; }
 
 .comparison-row ins { background: var(--seal-light); color: var(--seal-dark); text-decoration: none; }
+
+.input-char.input-insert { background: var(--seal-light); box-shadow: inset 0 -2px var(--seal); color: var(--seal-dark); text-decoration: none; }
