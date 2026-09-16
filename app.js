@@ -280,52 +280,49 @@
     const review = practice.status === "finished";
     const alignment = review ? alignChars(target, typed) : null;
     const states = new Array(target.length).fill("pending");
-    const insertions = Array.from({ length: target.length + 1 }, () => []);
+    const insertionMarkers = new Array(target.length + 1).fill(false);
     if (alignment) {
       alignment.operations.forEach((operation) => {
-        if (operation.type === "insert") insertions[operation.targetIndex].push(operation.typedChar);
+        if (operation.type === "insert") insertionMarkers[operation.targetIndex] = true;
         else states[operation.targetIndex] = operation;
       });
     }
     const fragment = document.createDocumentFragment();
     let index = 0;
-    const appendInsertions = (at) => insertions[at].forEach((char) => {
-      const span = document.createElement("span");
-      span.className = "char-cell is-error is-insertion";
-      span.textContent = "＋" + char;
-      fragment.appendChild(span);
-    });
+    const appendMarker = (at) => {
+      if (!review || !insertionMarkers[at]) return;
+      const marker = document.createElement("span");
+      marker.className = "char-cell is-error is-insertion-marker";
+      fragment.appendChild(marker);
+    };
     Array.from(String(item.text).replace(/\r\n?/g, "\n")).forEach((char) => {
       if (char === "\n") {
-        if (review) appendInsertions(index);
+        appendMarker(index);
         fragment.appendChild(document.createElement("br"));
         if (!canIgnorePunctuation()) index += 1;
         return;
       }
       if (!canonical(char).length) {
-        if (review) appendInsertions(index);
+        appendMarker(index);
         const excluded = document.createElement("span");
         excluded.className = "char-cell is-excluded";
         excluded.textContent = char;
         fragment.appendChild(excluded);
         return;
       }
-      if (review) appendInsertions(index);
+      appendMarker(index);
       const span = document.createElement("span");
       span.className = "char-cell";
       span.textContent = char;
       span.dataset.index = String(index);
       if (review) {
         const state = states[index];
-        if (state?.type === "match") span.classList.add("is-correct");
-        else if (state?.type === "substitute") { span.classList.add("is-error", "has-wrong-typed"); span.dataset.typed = state.typedChar; }
-        else if (state?.type === "delete") { span.classList.add("is-error", "has-wrong-typed"); span.dataset.typed = "缺"; }
-        else span.classList.add("is-error");
+        if (state?.type === "substitute" || state?.type === "delete") span.classList.add("is-error");
       }
       fragment.appendChild(span);
       index += 1;
     });
-    if (review) appendInsertions(index);
+    appendMarker(index);
     els.sourceText.replaceChildren(fragment);
     els.body.classList.toggle("is-reviewing", review);
     updateInputHighlight();
@@ -338,7 +335,7 @@
     practice.errors = alignment.errorCount;
     const ms = Math.max(0, elapsed());
     const minutes = ms / 60000;
-    const accuracy = alignment.totalUnits ? alignment.matches / alignment.totalUnits * 100 : 100;
+    const accuracy = target.length ? Math.min(100, alignment.matches / target.length * 100) : 100;
     return {
       target,
       typed,
@@ -473,9 +470,14 @@
       if (at >= 0) {
         const removeAt = prefix + at + 1;
         value = value.slice(0, removeAt) + value.slice(removeAt + 1);
-        const caret = Math.max(prefix + at + 1, (input.selectionStart || value.length + 1) - 1);
+        const caret = prefix + at + 1;
         input.value = value;
-        input.setSelectionRange(caret, caret);
+        const restoreCaret = () => {
+          if (input.value === value) input.setSelectionRange(caret, caret);
+        };
+        restoreCaret();
+        queueMicrotask(restoreCaret);
+        requestAnimationFrame(restoreCaret);
         return value;
       }
     }
@@ -656,7 +658,20 @@
     els.countdownToggle.addEventListener("change", () => { settings.countdown = els.countdownToggle.checked; saveSettings(); updateUI(); });
     els.startButton.addEventListener("click", () => practice.status === "running" ? finishPractice("manual") : startPractice()); els.pauseButton.addEventListener("click", pausePractice); els.resetButton.addEventListener("click", () => resetPractice(false));
     els.typingInput.addEventListener("scroll", syncInputHighlight);
-    els.typingInput.addEventListener("beforeinput", (event) => { lastInputType = event.inputType || ""; });
+    els.typingInput.addEventListener("beforeinput", (event) => {
+      lastInputType = event.inputType || "";
+      if (composing || event.isComposing || practice.status === "finished") return;
+      const data = event.data || "";
+      const pairs = [["《", "》"], ["“", "”"], ["‘", "’"], ["（", "）"], ["【", "】"], ["〈", "〉"], ["〔", "〕"], ["「", "」"], ["『", "』"], ["｛", "｝"], ["[", "]"], ["{", "}"]];
+      const pair = pairs.find(([open, close]) => data === open || data === open + close);
+      if (!pair || lastInputType === "insertFromPaste" || lastInputType === "insertFromDrop") return;
+      event.preventDefault();
+      const input = els.typingInput;
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      input.setRangeText(pair[0], start, end, "end");
+      processInput({ inputType: "insertText" });
+    });
     els.typingInput.addEventListener("compositionstart", () => { composing = true; }); els.typingInput.addEventListener("compositionend", () => { composing = false; processInput(); }); els.typingInput.addEventListener("input", processInput);
     els.peekSourceButton.addEventListener("click", () => { els.body.classList.toggle("is-peeking"); els.peekSourceButton.textContent = els.body.classList.contains("is-peeking") ? "收回原文" : "临时查看原文"; updateSpeech(); });
     els.focusButton.addEventListener("click", toggleFocus);
